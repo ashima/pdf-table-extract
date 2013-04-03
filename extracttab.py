@@ -1,4 +1,4 @@
-# Description : Array and textureless GLSL 2D simplex noise function.
+# Description : PDF Table Extraction Utility
 #      Author : Ian McEwan, Ashima Research.
 #  Maintainer : ijm
 #     Lastmod : 20130402 (ijm)
