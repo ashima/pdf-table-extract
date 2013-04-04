@@ -28,6 +28,12 @@ def procargs() :
   p.add_argument("-name", help="name to add to XML tag, or HTML comments")
   p.add_argument("-pad", help="imitial image pading (pixels)", type=int,
      default=2 )
+  p.add_argument("-white",action="append", 
+    help="paint white to the bitmap as left:top:right:bottom in length units."
+         "Done before painting black" )
+  p.add_argument("-black",action="append", 
+    help="paint black to the bitmap as left:top:right:bottom in length units."
+         "Done after poainting white" )
   p.add_argument("-bitmap", action="store_true",
      help = "Dump working bitmap not debuging image." )
   p.add_argument("-checkcrop",  action="store_true",
@@ -113,7 +119,10 @@ def writePNM(fd,img):
 
 
 def dumpImage(args,bmp,img) :
-    writePNM(args.outfile, bmp if args.bitmap else img)
+    oi = bmp if args.bitmap else img
+    pad = args.pad
+    (height,width) = bmp.shape
+    writePNM(args.outfile, oi[pad:height-pad, pad:width-pad])
     args.outfile.close()
 
 #-----------------------------------------------------------------------
@@ -136,7 +145,7 @@ def process_page(pgs) :
   width+=pad*2
   
 # reimbed image with a white padd.
-  bmp = ones( (height,width) , dtype=uint8 )
+  bmp = ones( (height,width) , dtype=bool )
   bmp[pad:height-pad,pad:width-pad] = ( data[:,:] > int(255.0*args.g/100.0) )
 
 # Set up Debuging image.
@@ -177,10 +186,27 @@ def process_page(pgs) :
   bmp[b,:] = 0
   bmp[:,l] = 0
   bmp[:,r] = 0
+
+# paint white ...
+
+  if args.white :
+    for b in args.white :
+      (l,t,r,b) = [args.r * float(x) + args.pad for x in b.split(":") ]
+      bmp[ t:b+1,l:r+1 ] = 1
+      img[ t:b+1,l:r+1 ] = [255,255,255]
   
+# paint black ...
+  if args.black :
+    for b in args.black :
+      (l,t,r,b) = [args.r * float(x) + args.pad for x in b.split(":") ]
+      bmp[ t:b+1,l:r+1 ] = 0
+      img[ t:b+1,l:r+1 ] = [0,0,0]
+
   if args.checkcrop :
     dumpImage(args,bmp,img)
     sys.exit(0)
+    
+  
 #-----------------------------------------------------------------------
 # Line finding section.
 #
