@@ -18,9 +18,12 @@ def procargs() :
   p.add_argument("-i", dest='infile',  help="input file" )
   p.add_argument("-o", dest='outfile', help="output file", default=sys.stdout,
      type=argparse.FileType('w') )
-  p.add_argument("-p", dest='page', required=True, action="append",
-     help="a page in the PDF to process, as page[:firstrow:lastrow]." )
   p.add_argument("-g", help="grayscale threshold (%%)", type=int, default=25 )
+  p.add_argument("-p", type=str, dest='page', required=True, action="append",
+     help="a page in the PDF to process, as page[:firstrow:lastrow]." )
+  p.add_argument("-c", type=str, dest='crop',
+     help="crop to left:top:right:bottom. Paints white outside this "
+          "rectangle."  )
   p.add_argument("-l", type=float, default=0.17 ,
      help="line length threshold (length)" )
   p.add_argument("-r", type=int, default=300,
@@ -187,11 +190,27 @@ def process_page(pgs) :
   bmp[:,l] = 0
   bmp[:,r] = 0
 
-# paint white ...
+  def boxOfString(x,p) :
+    s = x.split(":")
+    if len(s) < 4 :
+      raise Exception("boxes have format left:top:right:bottom[:page]")
+    return ([args.r * float(x) + args.pad for x in s[0:4] ]
+                + [ p if len(s)<5 else int(s[4]) ] ) 
 
+
+# translate crop to paint white.
+  whites = []
+  if args.crop :
+    (l,t,r,b,p) = boxOfString(args.crop,pg) 
+    whites.extend( [ (0,0,l,height,p), (0,0,width,t,p),
+                     (r,0,width,height,p), (0,b,width,height,p) ] )
+
+# paint white ...
   if args.white :
-    for b in args.white :
-      (l,t,r,b) = [args.r * float(x) + args.pad for x in b.split(":") ]
+    whites.extend( [ boxOfString(b, pg) for b in args.white ] )
+
+  for (l,t,r,b,p) in whites :
+    if p == pg :
       bmp[ t:b+1,l:r+1 ] = 1
       img[ t:b+1,l:r+1 ] = [255,255,255]
   
@@ -396,7 +415,8 @@ def o_cells_xml(cells,pgs) :
   doc = getDOMImplementation().createDocument(None,"table", None)
   root = doc.documentElement;
   root.setAttribute("src",args.infile)
-  root.setAttribute("name",args.name)
+  if args.name :
+    root.setAttribute("name",args.name)
   for cl in cells :
     x = doc.createElement("cell")
     map(lambda(a): x.setAttribute(*a), zip("xywhp",map(str,cl)))
@@ -430,8 +450,9 @@ def o_table_html(cells,pgs) :
     (i,j,u,v,pg,value) = cells[k]
     if j > oj or pg > opg:
       if pg > opg:
-        root.appendChild( doc.createComment(
-          "Name: %s, Source: %s page %d." % (args.name,args.infile, pg) ));
+        s = "Name: " + args.name + ", " if args.name else ""
+        root.appendChild( doc.createComment( s + 
+          ("Source: %s page %d." % (args.infile, pg) )));
       if tr :
         root.appendChild(tr)
       tr = doc.createElement("tr")
