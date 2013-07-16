@@ -267,16 +267,16 @@ def process_page(pgs) :
 
   while i < len(vd) :
     if vd[i+1]-vd[i] > maxdiv :
-      vd.pop(i)
-      vd.pop(i)
+      vd = delete(vd,i)
+      vd = delete(vd,i)
     else:
       i=i+2
   
   j = 0 
   while j < len(hd):
     if hd[j+1]-hd[j] > maxdiv :
-      hd.pop(j)
-      hd.pop(j)
+      hd = delete(hd,j)
+      hd = delete(hd,j)
     else:
       j=j+2
   
