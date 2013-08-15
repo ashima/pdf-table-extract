@@ -425,10 +425,15 @@ def o_cells_xml(cells,pgs) :
     root.appendChild(x)
   args.outfile.write( doc.toprettyxml() )
   
-def o_table_csv(cells,pgs) : 
-  tab = [ [ [ "" for x in range(len(vd)/2 +1)
-            ] for x in range(len(hd)/2+1) 
-          ] for x in range(len(pgs))
+def o_table_csv(cells,pgs) :
+  l=[0,0,0]
+  for (i,j,u,v,pg,value) in cells :
+      r=[i,j,pg]
+      l = (l>=r)*l+(l<r)*r
+  
+  tab = [ [ [ "" for x in range(l[0]+1)
+            ] for x in range(l[1]+1)
+          ] for x in range(l[2]+1)
         ]
   for (i,j,u,v,pg,value) in cells :
     tab[pg][j][i] = value
