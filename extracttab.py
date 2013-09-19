@@ -482,6 +482,7 @@ def o_table_html(cells,pgs) :
 #-----------------------------------------------------------------------
 # main
 
+args = procargs()
 
 cells = []
 for pgs in args.page :
