@@ -480,14 +480,16 @@ def o_table_html(cells,pgs) :
 #-----------------------------------------------------------------------
 # main
 
-args = procargs()
+if __name__ == "__main__":
 
-cells = []
-for pgs in args.page :
-  cells.extend(process_page(pgs))
+    args = procargs()
 
-{ "cells_csv" : o_cells_csv,   "cells_json" : o_cells_json,
-  "cells_xml" : o_cells_xml,   "table_csv"  : o_table_csv,
-  "table_html": o_table_html,  "table_chtml": o_table_html,
-  } [ args.t ](cells,args.page)
+    cells = []
+    for pgs in args.page :
+      cells.extend(process_page(pgs))
+
+    { "cells_csv" : o_cells_csv,   "cells_json" : o_cells_json,
+      "cells_xml" : o_cells_xml,   "table_csv"  : o_table_csv,
+      "table_html": o_table_html,  "table_chtml": o_table_html,
+      } [ args.t ](cells,args.page)
 
