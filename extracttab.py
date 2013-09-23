@@ -427,9 +427,10 @@ def o_cells_xml(cells,pgs) :
   
 def o_table_csv(cells,pgs) :
   l=[0,0,0]
+
   for (i,j,u,v,pg,value) in cells :
       r=[i,j,pg]
-      l = (l>=r)*l+(l<r)*r
+      l = [max(x) for x in zip(l,r)]
   
   tab = [ [ [ "" for x in range(l[0]+1)
             ] for x in range(l[1]+1)
