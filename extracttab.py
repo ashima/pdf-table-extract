@@ -430,8 +430,7 @@ def o_table_csv(cells,pgs) :
 
   for (i,j,u,v,pg,value) in cells :
       r=[i,j,pg]
-      for ii, (l_it, r_it) in enumerate(zip(l, r)):
-          l[ii] = max(l_it, r_it)
+      l = [max(x) for x in zip(l,r)]
   
   tab = [ [ [ "" for x in range(l[0]+1)
             ] for x in range(l[1]+1)
