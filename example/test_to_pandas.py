@@ -1,5 +1,5 @@
 import pandas as pd
-import pdftableextract.core as pdf
+import pdftableextract as pdf
 
 pages = ["1"]
 cells = []

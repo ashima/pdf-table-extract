@@ -58,7 +58,6 @@ def procargs() :
 def main():
     import core
     args = procargs()
-    logging.basicConfig()
     cells = []
     if args.checkcrop or args.checklines or args.checkdivs or args.checkcells:
         for pgs in args.page :
