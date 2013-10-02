@@ -1,7 +1,7 @@
 import argparse
 import sys
 import logging
-from .core import PDFTableExtract
+from .core import process_page, output
 #-----------------------------------------------------------------------
 
 def procargs() :
@@ -44,7 +44,7 @@ def procargs() :
   p.add_argument("-boxes", action="store_true",
      help = "Just output cell corners, don't send cells to pdftotext." )
   p.add_argument("-t", choices=['cells_csv','cells_json','cells_xml',
-     'table_csv','table_html','table_chtml'],
+     'table_csv','table_html','table_chtml','table_list'],
      default="cells_xml",
      help = "output type (table_chtml is colorized like '-checkcells') "
             "(default cells_xml)" )
@@ -59,8 +59,17 @@ def main():
     import core
     args = procargs()
     logging.basicConfig()
-    pte = PDFTableExtract(infile=args.infile, 
-                outfilename=args.outfile, 
+    cells = []
+    if args.checkcrop or args.checklines or args.checkdivs or args.checkcells:
+        for pgs in args.page :
+            success = process_page(args.infile, pgs,
+                bitmap=args.bitmap, 
+                checkcrop=args.checkcrop, 
+                checklines=args.checklines, 
+                checkdivs=args.checkdivs,
+                checkcells=args.checkcells,
+                whitespace=args.whitespace,
+                boxes=args.boxes,
                 greyscale_threshold=args.greyscale_threshold,
                 page=args.page,
                 crop=args.crop,
@@ -71,32 +80,31 @@ def main():
                 white=args.white,
                 black=args.black)
 
-    cells = []
-    if args.checkcrop or args.checklines or args.checkdivs or args.checkcells:
+    else:
         for pgs in args.page :
-            print "MAIN"
-            pte.process_page(pgs,
+            cells.extend(process_page(args.infile, pgs,
                 bitmap=args.bitmap, 
                 checkcrop=args.checkcrop, 
                 checklines=args.checklines, 
                 checkdivs=args.checkdivs,
                 checkcells=args.checkcells,
                 whitespace=args.whitespace,
-                boxes=args.boxes)
-    else:
-        for pgs in args.page :
-            cells.extend(pte.process_page(pgs,
-                    bitmap=args.bitmap, 
-                    checkcrop=args.checkcrop, 
-                    checklines=args.checklines, 
-                    checkdivs=args.checkdivs,
-                    checkcells=args.checkcells,
-                    whitespace=args.whitespace,
-                    boxes=args.boxes))
+                boxes=args.boxes,
+                greyscale_threshold=args.greyscale_threshold,
+                page=args.page,
+                crop=args.crop,
+                line_length=args.line_length,
+                bitmap_resolution=args.bitmap_resolution,
+                name=args.name,
+                pad=args.pad,
+                white=args.white,
+                black=args.black))
 
-
-            print cells
-            getattr(pte, "o_{0}".format(args.t))(cells, args.page)
+            filenames = dict()
+            if args.outfile is None:
+                args.outfile = sys.stdout
+            filenames["{0}_filename".format(args.t)] = args.outfile
+            output(cells, args.page, name=args.name, infile=args.infile, output_type=args.t, **filenames)
 
 
 

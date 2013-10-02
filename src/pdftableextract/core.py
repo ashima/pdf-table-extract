@@ -28,7 +28,7 @@ def process_page(infile, pgs,
     greyscale_threshold=25,
     page=None,
     crop=None,
-    line_length=0.17
+    line_length=0.17,
     bitmap_resolution=300,
     name=None,
     pad=2,
@@ -298,13 +298,54 @@ def process_page(infile, pgs,
   return cells
 
 #-----------------------------------------------------------------------
-tput section.
+#output section.
 
-def o_cells_csv(cells,pgs) :
+def output(cells, pgs, 
+                cells_csv_filename=None, 
+                cells_json_filename=None, 
+                cells_xml_filename=None, 
+                table_csv_filename=None,
+                table_html_filename=None,
+                table_list_filename=None,
+                infile=None, name=None, output_type=None
+                ):
+                
+    output_types = [
+             dict(filename=cells_csv_filename, function=o_cells_csv),  
+             dict(filename=cells_json_filename, function=o_cells_json), 
+             dict(filename=cells_xml_filename, function=o_cells_xml), 
+             dict(filename=table_csv_filename, function=o_table_csv),
+             dict(filename=table_html_filename, function=o_table_html),
+             dict(filename=table_list_filename, function=o_table_list)
+             ]
+             
+    for entry in output_types:
+        if entry["filename"]:
+            if entry["filename"] != sys.stdout:
+                outfile = open(entry["filename"],'w')
+            else:
+                outfile = sys.stdout
+            
+            entry["function"](cells, pgs, 
+                                outfile=outfile, 
+                                name=name, 
+                                infile=infile, 
+                                output_type=output_type)
+
+            if entry["filename"] != sys.stdout:
+                outfile.close()
+        
+def o_cells_csv(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  outfile = outfile or sys.stdout
   csv.writer( outfile , dialect='excel' ).writerows(cells)
 
-def o_cells_json(cells,pgs) :
+def o_cells_json(cells,pgs, outfilename=None, infile=None, name=None, output_type=None) :
   """Output JSON formatted cell data"""
+  outfile = outfile or sys.stdout
+  #defaults
+  infile=infile or ""
+  name=name or ""
+  
   json.dump({ 
     "src": infile,
     "name": name,
@@ -312,25 +353,30 @@ def o_cells_json(cells,pgs) :
     "cells":cells
     }, outfile)
 
-def o_cells_xml(self, cells,pgs) : 
+def o_cells_xml(cells,pgs, outfile=None,infile=None, name=None, output_type=None) : 
   """Output XML formatted cell data"""
+  outfile = outfile or sys.stdout
+  #defaults
+  infile=infile or ""
+  name=name or ""
+
   doc = getDOMImplementation().createDocument(None,"table", None)
   root = doc.documentElement;
-  root.setAttribute("src",self.infile)
-  if self.name :
-    root.setAttribute("name",self.name)
+  if infile :
+    root.setAttribute("src",infile)
+  if name :
+    root.setAttribute("name",name)
   for cl in cells :
     x = doc.createElement("cell")
     map(lambda(a): x.setAttribute(*a), zip("xywhp",map(str,cl)))
     if cl[5] != "" :
       x.appendChild( doc.createTextNode(cl[5]) )
     root.appendChild(x)
-  self.outfile.write( doc.toprettyxml() )
+  outfile.write( doc.toprettyxml() )
   
-def o_table_csv(self, cells,pgs) :
-  """Output CSV formatted table"""
+def table_to_list(cells,pgs) : 
+  """Output list of lists"""
   l=[0,0,0]
-
   for (i,j,u,v,pg,value) in cells :
       r=[i,j,pg]
       l = [max(x) for x in zip(l,r)]
@@ -341,11 +387,26 @@ def o_table_csv(self, cells,pgs) :
         ]
   for (i,j,u,v,pg,value) in cells :
     tab[pg][j][i] = value
+
+  return tab
+
+def o_table_csv(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  """Output CSV formatted table"""
+  outfile = outfile or sys.stdout
+  tab=table_to_list(cells, pgs)
   for t in tab:
-    csv.writer( self.outfile , dialect='excel' ).writerows(t)
+    csv.writer( outfile , dialect='excel' ).writerows(t)
   
-def o_table_html(self, cells,pgs, output_type=None) : 
+
+def o_table_list(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  """Output list of lists"""
+  outfile = outfile or sys.stdout
+  tab = table_to_list(cells, pgs)
+  print(tab)
+    
+def o_table_html(cells,pgs, outfile=None, output_type=None, name=None, infile=None) : 
   """Output HTML formatted table"""
+
   oj = 0 
   opg = 0
   doc = getDOMImplementation().createDocument(None,"table", None)
@@ -380,5 +441,5 @@ def o_table_html(self, cells,pgs, output_type=None) :
             tuple(128+col(k/(nc+0.))))
     tr.appendChild(td)
   root.appendChild(tr)
-  args.outfile.write( doc.toprettyxml() )
+  outfile.write( doc.toprettyxml() )
   
