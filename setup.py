@@ -3,8 +3,8 @@ import sys, os
 from pip.req import parse_requirements
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = open(os.path.join(here, 'README.rst')).read()
-NEWS = open(os.path.join(here, 'NEWS.txt')).read()
+README = open(os.path.join(here, 'README.md')).read()
+#NEWS = open(os.path.join(here, 'NEWS.txt')).read()
 
 
 version = '0.1'
@@ -16,7 +16,7 @@ install_requires = [    str(ir.req) for ir in from_requirements_txt ]
 setup(name='pdf-table-extract',
     version=version,
     description="Extract Tables from PDF files",
-    long_description=README + '\n\n' + NEWS,
+    long_description=README + '\n\n',# + NEWS,
     classifiers=[
       # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
     ],
