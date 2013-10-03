@@ -1,141 +1,53 @@
-# Description : PDF Table Extraction Utility
-#      Author : Ian McEwan, Ashima Research.
-#  Maintainer : ijm
-#     Lastmod : 20130402 (ijm)
-#     License : Copyright (C) 2011 Ashima Research. All rights reserved.
-#               Distributed under the MIT Expat License. See LICENSE file.
-#               https://github.com/ashima/pdf-table-extract
-
-import sys, argparse, subprocess, re, csv, json
-from numpy import *
+import sys
+from numpy import array, fromstring, ones, zeros, uint8, diff, where, sum
+import subprocess
+from pipes import quote
+from .pnm import readPNM, dumpImage
+import re
 from pipes import quote
 from xml.dom.minidom import getDOMImplementation
-
-#-----------------------------------------------------------------------
-
-def procargs() :
-  p = argparse.ArgumentParser( description="Finds tables in a PDF page.")
-  p.add_argument("-i", dest='infile',  help="input file" )
-  p.add_argument("-o", dest='outfile', help="output file", default=sys.stdout,
-     type=argparse.FileType('w') )
-  p.add_argument("-g", help="grayscale threshold (%%)", type=int, default=25 )
-  p.add_argument("-p", type=str, dest='page', required=True, action="append",
-     help="a page in the PDF to process, as page[:firstrow:lastrow]." )
-  p.add_argument("-c", type=str, dest='crop',
-     help="crop to left:top:right:bottom. Paints white outside this "
-          "rectangle."  )
-  p.add_argument("-l", type=float, default=0.17 ,
-     help="line length threshold (length)" )
-  p.add_argument("-r", type=int, default=300,
-     help="resolution of internal bitmap (dots per length unit)" )
-  p.add_argument("-name", help="name to add to XML tag, or HTML comments")
-  p.add_argument("-pad", help="imitial image pading (pixels)", type=int,
-     default=2 )
-  p.add_argument("-white",action="append", 
-    help="paint white to the bitmap as left:top:right:bottom in length units."
-         "Done before painting black" )
-  p.add_argument("-black",action="append", 
-    help="paint black to the bitmap as left:top:right:bottom in length units."
-         "Done after poainting white" )
-  p.add_argument("-bitmap", action="store_true",
-     help = "Dump working bitmap not debuging image." )
-  p.add_argument("-checkcrop",  action="store_true",
-     help = "Stop after finding croping rectangle, and output debuging "
-            "image (use -bitmap).")
-  p.add_argument("-checklines", action="store_true",
-     help = "Stop after finding lines, and output debuging image." )
-  p.add_argument("-checkdivs",  action="store_true",
-     help = "Stop after finding dividors, and output debuging image." )
-  p.add_argument("-checkcells", action="store_true",
-     help = "Stop after finding cells, and output debuging image." )
-  p.add_argument("-colmult", type=float, default=1.0,
-     help = "color cycling multiplyer for checkcells and chtml" )
-  p.add_argument("-boxes", action="store_true",
-     help = "Just output cell corners, don't send cells to pdftotext." )
-  p.add_argument("-t", choices=['cells_csv','cells_json','cells_xml',
-     'table_csv','table_html','table_chtml'],
-     default="cells_xml",
-     help = "output type (table_chtml is colorized like '-checkcells') "
-            "(default cells_xml)" )
-  p.add_argument("-w", choices=['none','normalize','raw'], default="normalize",
-     help = "What to do with whitespace in cells. none = remove it all, "
-            "normalize (default) = any whitespace (including CRLF) replaced "
-            "with a single space, raw = do nothing." )
-
-  return p.parse_args()
-
+import json
+import csv
 #-----------------------------------------------------------------------
 def colinterp(a,x) :
-  l = len(a)-1
-  i = min(l, max(0, int (x * l)))
-  (u,v) = a[i:i+2,:]
-  return u - (u-v) * ((x * l) % 1.0)
+    """Interpolates colors"""
+    l = len(a)-1
+    i = min(l, max(0, int (x * l)))
+    (u,v) = a[i:i+2,:]
+    return u - (u-v) * ((x * l) % 1.0)
 
 colarr = array([ [255,0,0],[255,255,0],[0,255,0],[0,255,255],[0,0,255] ])
 
-def col(x) :
-  return colinterp(colarr,(args.colmult * x)% 1.0) / 2
+def col(x, colmult=1.0) :
+    """colors"""
+    return colinterp(colarr,(colmult * x)% 1.0) / 2
 
-#-----------------------------------------------------------------------
-# PNM stuff.
 
-def noncomment(fd):
-  while True:
-    x = fd.readline() 
-    if x.startswith('#') :
-      continue
-    else:
-      return x
-
-def readPNM(fd):
-  t = noncomment(fd)
-  s = noncomment(fd)
-  m = noncomment(fd) if not (t.startswith('P1') or t.startswith('P4')) else '1'
-  data = fd.read()
-
-  xs, ys = s.split()
-  width = int(xs)
-  height = int(ys)
-  m = int(m)
-
-  if m != 255 :
-    print "Just want 8 bit pgms for now!"
-  
-  d = fromstring(data,dtype=uint8)
-  d = reshape(d, (height,width) )
-  return (m,width,height, d)
-
-def writePNM(fd,img):
-  s = img.shape
-  m = 255
-  if img.dtype == bool :
-    img = img + uint8(0) 
-    t = "P5"
-    m = 1
-  elif len(s) == 2 :
-    t = "P5"
-  else:
-    t = "P6"
+def process_page(infile, pgs, 
+    outfilename=None,
+    greyscale_threshold=25,
+    page=None,
+    crop=None,
+    line_length=0.17,
+    bitmap_resolution=300,
+    name=None,
+    pad=2,
+    white=None,
+    black=None,
+    bitmap=False, 
+    checkcrop=False, 
+    checklines=False, 
+    checkdivs=False,
+    checkcells=False,
+    whitespace="normalize",
+    boxes=False) :
     
-  fd.write( "%s\n%d %d\n%d\n" % (t, s[1],s[0],m) )
-  fd.write( uint8(img).tostring() )
-
-
-def dumpImage(args,bmp,img) :
-    oi = bmp if args.bitmap else img
-    pad = args.pad
-    (height,width) = bmp.shape
-    writePNM(args.outfile, oi[pad:height-pad, pad:width-pad])
-    args.outfile.close()
-
-#-----------------------------------------------------------------------
-# Proccessing function.
-
-def process_page(pgs) :
+  outfile = open(outfilename,'w') if outfilename else sys.stdout
+  page=page or []
   (pg,frow,lrow) = (map(int,(pgs.split(":")))+[None,None])[0:3]
 
   p = subprocess.Popen( ("pdftoppm -gray -r %d -f %d -l %d %s " %
-      (args.r,pg,pg,quote(args.infile))),
+      (bitmap_resolution,pg,pg,quote(infile))),
       stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True )
 
 #-----------------------------------------------------------------------
@@ -143,13 +55,13 @@ def process_page(pgs) :
 
   (maxval, width, height, data) = readPNM(p.stdout)
 
-  pad = int(args.pad)
+  pad = int(pad)
   height+=pad*2
   width+=pad*2
   
 # reimbed image with a white padd.
   bmp = ones( (height,width) , dtype=bool )
-  bmp[pad:height-pad,pad:width-pad] = ( data[:,:] > int(255.0*args.g/100.0) )
+  bmp[pad:height-pad,pad:width-pad] = ( data[:,:] > int(255.0*greyscale_threshold/100.0) )
 
 # Set up Debuging image.
   img = zeros( (height,width,3) , dtype=uint8 )
@@ -159,7 +71,6 @@ def process_page(pgs) :
 
 #-----------------------------------------------------------------------
 # Find bounding box.
-
   t=0
   while t < height and sum(bmp[t,:]==0) == 0 :
     t=t+1
@@ -193,21 +104,21 @@ def process_page(pgs) :
   def boxOfString(x,p) :
     s = x.split(":")
     if len(s) < 4 :
-      raise Exception("boxes have format left:top:right:bottom[:page]")
-    return ([args.r * float(x) + args.pad for x in s[0:4] ]
+      raise ValueError("boxes have format left:top:right:bottom[:page]")
+    return ([bitmap_resolution * float(x) + pad for x in s[0:4] ]
                 + [ p if len(s)<5 else int(s[4]) ] ) 
 
 
 # translate crop to paint white.
   whites = []
-  if args.crop :
-    (l,t,r,b,p) = boxOfString(args.crop,pg) 
+  if crop :
+    (l,t,r,b,p) = boxOfString(crop,pg) 
     whites.extend( [ (0,0,l,height,p), (0,0,width,t,p),
                      (r,0,width,height,p), (0,b,width,height,p) ] )
 
 # paint white ...
-  if args.white :
-    whites.extend( [ boxOfString(b, pg) for b in args.white ] )
+  if white :
+    whites.extend( [ boxOfString(b, pg) for b in white ] )
 
   for (l,t,r,b,p) in whites :
     if p == pg :
@@ -215,24 +126,23 @@ def process_page(pgs) :
       img[ t:b+1,l:r+1 ] = [255,255,255]
   
 # paint black ...
-  if args.black :
-    for b in args.black :
-      (l,t,r,b) = [args.r * float(x) + args.pad for x in b.split(":") ]
+  if black :
+    for b in black :
+      (l,t,r,b) = [bitmap_resolution * float(x) + pad for x in b.split(":") ]
       bmp[ t:b+1,l:r+1 ] = 0
       img[ t:b+1,l:r+1 ] = [0,0,0]
 
-  if args.checkcrop :
-    dumpImage(args,bmp,img)
-    sys.exit(0)
+  if checkcrop :
+    dumpImage(outfile,bmp,img, bitmap, pad)
+    return True
     
-  
 #-----------------------------------------------------------------------
 # Line finding section.
 #
-# Find all verticle or horizontal lines that are more than rlthresh 
+# Find all vertical or horizontal lines that are more than rlthresh 
 # long, these are considered lines on the table grid.
 
-  lthresh = int(args.l * args.r)
+  lthresh = int(line_length * bitmap_resolution)
   vs = zeros(width, dtype=int)
   for i in range(width) :
     dd = diff( where(bmp[:,i])[0] ) 
@@ -261,7 +171,6 @@ def process_page(pgs) :
 
 #-----------------------------------------------------------------------
 # Look for dividors that are too large.
-
   maxdiv=10
   i=0
 
@@ -280,15 +189,14 @@ def process_page(pgs) :
     else:
       j=j+2
   
-  if args.checklines :
+  if checklines :
     for i in vd :
       img[:,i] = [255,0,0] # red
   
     for j in hd :
       img[j,:] = [0,0,255] # blue
-    dumpImage(args,bmp,img)
-    sys.exit(0)
-  
+    dumpImage(outfile,bmp,img)
+    return True
 #-----------------------------------------------------------------------
 # divider checking.
 #
@@ -300,7 +208,7 @@ def process_page(pgs) :
           # if any col or row (in axis) is all zeros ...
     return sum( sum(bmp[t:b, l:r], axis=a)==0 ) >0 
 
-  if args.checkdivs :
+  if checkdivs :
     img = img / 2
     for j in range(0,len(hd),2):
       for i in range(0,len(vd),2):
@@ -317,10 +225,8 @@ def process_page(pgs) :
           if isDiv(0, l,r,t,b) :
             img[ t:b, l:r, 0 ] = 255
             img[ t:b, l:r, 2 ] = 0
-  
-    dumpImage(args,bmp,img)
-    sys.exit(0)
-  
+    dumpImage(outfile,bmp,img)
+    return True
 #-----------------------------------------------------------------------
 # Cell finding section.
 # This algorithum is width hungry, and always generates rectangular
@@ -353,16 +259,15 @@ def process_page(pgs) :
     j=j+1
   
   
-  if args.checkcells :
+  if checkcells :
     nc = len(cells)+0.
     img = img / 2
     for k in range(len(cells)):
       (i,j,u,v) = cells[k]
       (l,r,t,b) = ( vd[2*i+1] , vd[ 2*(i+u) ], hd[2*j+1], hd[2*(j+v)] )
       img[ t:b, l:r ] += col( k/nc )
-    dumpImage(args,bmp,img)
-    sys.exit(0)
-  
+    dumpImage(outfile,bmp,img)
+    return True
   
 #-----------------------------------------------------------------------
 # fork out to extract text for each cell.
@@ -373,23 +278,18 @@ def process_page(pgs) :
     (l,r,t,b) = ( vd[2*i+1] , vd[ 2*(i+u) ], hd[2*j+1], hd[2*(j+v)] )
     p = subprocess.Popen(
     ("pdftotext -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -"
-         % (args.r, l-pad, t-pad, r-l, b-t, pg, pg, quote(args.infile) ) ),
+         % (bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile) ) ),
         stdout=subprocess.PIPE, shell=True )
     
     ret = p.communicate()[0]
-    if args.w != 'raw' :
-      ret = whitespace.sub( "" if args.w == "none" else " ", ret )
+    if whitespace != 'raw' :
+      ret = whitespace.sub( "" if whitespace == "none" else " ", ret )
       if len(ret) > 0 :
         ret = ret[ (1 if ret[0]==' ' else 0) : 
                    len(ret) - (1 if ret[-1]==' ' else 0) ]
     return (i,j,u,v,pg,ret)
-
-  #if args.boxes :
-  #  cells = [ x + (pg,"",) for x in cells ]
-  #else :
-  #  cells = map(getCell, cells)
-  
-  if args.boxes :
+      
+  if boxes :
     cells = [ x + (pg,"",) for x in cells if 
               ( frow == None or (x[1] >= frow and x[1] <= lrow)) ]
   else :
@@ -398,36 +298,85 @@ def process_page(pgs) :
   return cells
 
 #-----------------------------------------------------------------------
-# Output section.
+#output section.
 
-def o_cells_csv(cells,pgs) :
-    csv.writer( args.outfile , dialect='excel' ).writerows(cells)
+def output(cells, pgs, 
+                cells_csv_filename=None, 
+                cells_json_filename=None, 
+                cells_xml_filename=None, 
+                table_csv_filename=None,
+                table_html_filename=None,
+                table_list_filename=None,
+                infile=None, name=None, output_type=None
+                ):
+                
+    output_types = [
+             dict(filename=cells_csv_filename, function=o_cells_csv),  
+             dict(filename=cells_json_filename, function=o_cells_json), 
+             dict(filename=cells_xml_filename, function=o_cells_xml), 
+             dict(filename=table_csv_filename, function=o_table_csv),
+             dict(filename=table_html_filename, function=o_table_html),
+             dict(filename=table_list_filename, function=o_table_list)
+             ]
+             
+    for entry in output_types:
+        if entry["filename"]:
+            if entry["filename"] != sys.stdout:
+                outfile = open(entry["filename"],'w')
+            else:
+                outfile = sys.stdout
+            
+            entry["function"](cells, pgs, 
+                                outfile=outfile, 
+                                name=name, 
+                                infile=infile, 
+                                output_type=output_type)
+
+            if entry["filename"] != sys.stdout:
+                outfile.close()
+        
+def o_cells_csv(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  outfile = outfile or sys.stdout
+  csv.writer( outfile , dialect='excel' ).writerows(cells)
+
+def o_cells_json(cells,pgs, outfilename=None, infile=None, name=None, output_type=None) :
+  """Output JSON formatted cell data"""
+  outfile = outfile or sys.stdout
+  #defaults
+  infile=infile or ""
+  name=name or ""
   
-def o_cells_json(cells,pgs) :
-    json.dump({ 
-      "src": args.infile,
-      "name": args.name,
-      "colnames": ( "x","y","width","height","page","contents" ),
-      "cells":cells
-      }, args.outfile)
- 
-def o_cells_xml(cells,pgs) : 
+  json.dump({ 
+    "src": infile,
+    "name": name,
+    "colnames": ( "x","y","width","height","page","contents" ),
+    "cells":cells
+    }, outfile)
+
+def o_cells_xml(cells,pgs, outfile=None,infile=None, name=None, output_type=None) : 
+  """Output XML formatted cell data"""
+  outfile = outfile or sys.stdout
+  #defaults
+  infile=infile or ""
+  name=name or ""
+
   doc = getDOMImplementation().createDocument(None,"table", None)
   root = doc.documentElement;
-  root.setAttribute("src",args.infile)
-  if args.name :
-    root.setAttribute("name",args.name)
+  if infile :
+    root.setAttribute("src",infile)
+  if name :
+    root.setAttribute("name",name)
   for cl in cells :
     x = doc.createElement("cell")
     map(lambda(a): x.setAttribute(*a), zip("xywhp",map(str,cl)))
     if cl[5] != "" :
       x.appendChild( doc.createTextNode(cl[5]) )
     root.appendChild(x)
-  args.outfile.write( doc.toprettyxml() )
+  outfile.write( doc.toprettyxml() )
   
-def o_table_csv(cells,pgs) :
+def table_to_list(cells,pgs) : 
+  """Output list of lists"""
   l=[0,0,0]
-
   for (i,j,u,v,pg,value) in cells :
       r=[i,j,pg]
       l = [max(x) for x in zip(l,r)]
@@ -438,15 +387,31 @@ def o_table_csv(cells,pgs) :
         ]
   for (i,j,u,v,pg,value) in cells :
     tab[pg][j][i] = value
+
+  return tab
+
+def o_table_csv(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  """Output CSV formatted table"""
+  outfile = outfile or sys.stdout
+  tab=table_to_list(cells, pgs)
   for t in tab:
-    csv.writer( args.outfile , dialect='excel' ).writerows(t)
+    csv.writer( outfile , dialect='excel' ).writerows(t)
   
-def o_table_html(cells,pgs) : 
+
+def o_table_list(cells,pgs, outfile=None, name=None, infile=None, output_type=None) :
+  """Output list of lists"""
+  outfile = outfile or sys.stdout
+  tab = table_to_list(cells, pgs)
+  print(tab)
+    
+def o_table_html(cells,pgs, outfile=None, output_type=None, name=None, infile=None) : 
+  """Output HTML formatted table"""
+
   oj = 0 
   opg = 0
   doc = getDOMImplementation().createDocument(None,"table", None)
   root = doc.documentElement;
-  if (args.t == "table_chtml" ):
+  if (output_type == "table_chtml" ):
     root.setAttribute("border","1")
     root.setAttribute("cellspaceing","0")
     root.setAttribute("style","border-spacing:0")
@@ -456,9 +421,9 @@ def o_table_html(cells,pgs) :
     (i,j,u,v,pg,value) = cells[k]
     if j > oj or pg > opg:
       if pg > opg:
-        s = "Name: " + args.name + ", " if args.name else ""
+        s = "Name: " + self.name + ", " if self.name else ""
         root.appendChild( doc.createComment( s + 
-          ("Source: %s page %d." % (args.infile, pg) )));
+          ("Source: %s page %d." % (self.infile, pg) )));
       if tr :
         root.appendChild(tr)
       tr = doc.createElement("tr")
@@ -471,26 +436,10 @@ def o_table_html(cells,pgs) :
       td.setAttribute("colspan",str(u))
     if v>1 :
       td.setAttribute("rowspan",str(v))
-    if args.t == "table_chtml" :
+    if output_type == "table_chtml" :
       td.setAttribute("style", "background-color: #%02x%02x%02x" %
             tuple(128+col(k/(nc+0.))))
     tr.appendChild(td)
   root.appendChild(tr)
-  args.outfile.write( doc.toprettyxml() )
+  outfile.write( doc.toprettyxml() )
   
-#-----------------------------------------------------------------------
-# main
-
-if __name__ == "__main__":
-
-    args = procargs()
-
-    cells = []
-    for pgs in args.page :
-      cells.extend(process_page(pgs))
-
-    { "cells_csv" : o_cells_csv,   "cells_json" : o_cells_json,
-      "cells_xml" : o_cells_xml,   "table_csv"  : o_table_csv,
-      "table_html": o_table_html,  "table_chtml": o_table_html,
-      } [ args.t ](cells,args.page)
-
