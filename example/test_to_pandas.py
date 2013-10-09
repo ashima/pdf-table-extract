@@ -1,8 +1,8 @@
 import pandas as pd
 import pdftableextract as pdf
 
-pages = ["1"]
-cells = [pdf.process_page("example.pdf",p) for p in pages]
+pages = ["2"]
+cells = [pdf.process_page("a.pdf",p) for p in pages]
 
 #flatten the cells structure
 cells = [item for sublist in cells for item in sublist ]

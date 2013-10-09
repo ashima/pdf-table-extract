@@ -77,7 +77,7 @@ def main():
                 name=args.name,
                 pad=args.pad,
                 white=args.white,
-                black=args.black)
+                black=args.black, outfilename=args.outfile)
 
     else:
         for pgs in args.page :
