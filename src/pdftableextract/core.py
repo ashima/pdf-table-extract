@@ -1,5 +1,5 @@
 import sys
-from numpy import array, fromstring, ones, zeros, uint8, diff, where, sum
+from numpy import array, fromstring, ones, zeros, uint8, diff, where, sum, delete
 import subprocess
 from pipes import quote
 from .pnm import readPNM, dumpImage
