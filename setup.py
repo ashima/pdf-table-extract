@@ -1,6 +1,5 @@
 from setuptools import setup, find_packages
-import sys, os
-from pip.req import parse_requirements
+import os
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.md')).read()
@@ -9,8 +8,7 @@ README = open(os.path.join(here, 'README.md')).read()
 
 version = '0.1'
 
-from_requirements_txt = parse_requirements("requirements.txt")
-install_requires = [    str(ir.req) for ir in from_requirements_txt ]
+install_requires = [ "numpy" ]
 
 
 setup(name='pdf-table-extract',
