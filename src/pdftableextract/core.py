@@ -1,4 +1,5 @@
 import sys
+import os
 from numpy import array, fromstring, ones, zeros, uint8, diff, where, sum, delete
 import subprocess
 from pipes import quote
@@ -8,7 +9,36 @@ from pipes import quote
 from xml.dom.minidom import getDOMImplementation
 import json
 import csv
+
 #-----------------------------------------------------------------------
+def check_for_required_executable(name,command):
+    """Checks for an executable called 'name' by running 'command' and supressing
+    output. If the return code is non-zero or an OS error occurs, an Exception is raised""" 
+    try:
+        with open(os.devnull, "w") as fnull:
+            result=subprocess.check_call(command,stdout=fnull, stderr=fnull)
+    except OSError as e:
+        message = """Error running {0}.
+Command failed: {1}
+{2}""".format(name, " ".join(command), e)
+        raise OSError(message)
+    except subprocess.CalledProcessError as e:
+        raise
+    except Exception as e:
+        raise
+
+#-----------------------------------------------------------------------
+def popen(name,command, *args, **kwargs):
+    try:
+        result=subprocess.Popen(command,*args, **kwargs)
+        return result
+    except OSError, e:
+        message="""Error running {0}. Is it installed correctly?
+Error: {1}""".format(name, e)
+        raise OSError(message)
+    except Exception, e:
+        raise 
+
 def colinterp(a,x) :
     """Interpolates colors"""
     l = len(a)-1
@@ -45,8 +75,11 @@ def process_page(infile, pgs,
   outfile = open(outfilename,'w') if outfilename else sys.stdout
   page=page or []
   (pg,frow,lrow) = (map(int,(pgs.split(":")))+[None,None])[0:3]
+  #check that pdftoppdm exists by running a simple command
+  check_for_required_executable("pdftoppm",["pdftoppm","-h"])
+  #end check
 
-  p = subprocess.Popen( ("pdftoppm -gray -r %d -f %d -l %d %s " %
+  p = popen("pdftoppm", ("pdftoppm -gray -r %d -f %d -l %d %s " %
       (bitmap_resolution,pg,pg,quote(infile))),
       stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True )
 
@@ -276,7 +309,7 @@ def process_page(infile, pgs,
    
   def getCell( (i,j,u,v) ):
     (l,r,t,b) = ( vd[2*i+1] , vd[ 2*(i+u) ], hd[2*j+1], hd[2*(j+v)] )
-    p = subprocess.Popen(
+    p = popen(
     ("pdftotext -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -"
          % (bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile) ) ),
         stdout=subprocess.PIPE, shell=True )

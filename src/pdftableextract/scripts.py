@@ -1,6 +1,7 @@
 import argparse
 import sys
 import logging
+import subprocess
 from .core import process_page, output
 #-----------------------------------------------------------------------
 
@@ -56,6 +57,18 @@ def procargs() :
   return p.parse_args()
 
 def main():
+  try:
+    imain()
+  except IOError as e:
+    sys.exit("I/O Error running pdf-table-extract: {0}".format(e))
+  except OSError as e:
+    sys.exit("OS Error: {0}".format(e))
+  except subprocess.CalledProcessError as e:
+    sys.exit("Error while checking a subprocess call: {0}".format(e))
+  except Exception as e:
+    sys.exit(e)
+
+def imain():
     import core
     args = procargs()
     cells = []
