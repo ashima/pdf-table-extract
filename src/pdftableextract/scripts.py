@@ -62,6 +62,7 @@ def main():
   except IOError as e:
     sys.exit("I/O Error running pdf-table-extract: {0}".format(e))
   except OSError as e:
+    print("An OS Error occurred running pdf-table-extract: Is `pdftoppm` installed and available?")
     sys.exit("OS Error: {0}".format(e))
   except subprocess.CalledProcessError as e:
     sys.exit("Error while checking a subprocess call: {0}".format(e))
