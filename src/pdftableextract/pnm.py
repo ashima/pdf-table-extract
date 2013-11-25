@@ -18,7 +18,10 @@ def readPNM(fd):
   s = noncomment(fd)
   m = noncomment(fd) if not (t.startswith('P1') or t.startswith('P4')) else '1'
   data = fd.read()
-
+  ls = len(s.split())
+  if ls != 2 :
+    name = "<pipe>" if fd.name=="<fdopen>" else "Filename = {0}".format(fd.name)
+    raise IOError("Expected 2 elements from parsing PNM file, got {0}: {1}".format(ls, name))
   xs, ys = s.split()
   width = int(xs)
   height = int(ys)
