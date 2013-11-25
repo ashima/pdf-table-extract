@@ -326,6 +326,9 @@ def process_page(infile, pgs,
     cells = [ x + (pg,"",) for x in cells if 
               ( frow == None or (x[1] >= frow and x[1] <= lrow)) ]
   else :
+    #check that pdftotext exists by running a simple command
+    check_for_required_executable("pdftotext",["pdftotext","-h"])
+    #end check
     cells = [ getCell(x)   for x in cells if 
               ( frow == None or (x[1] >= frow and x[1] <= lrow)) ]
   return cells
