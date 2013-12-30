@@ -375,7 +375,7 @@ def o_cells_csv(cells,pgs, outfile=None, name=None, infile=None, output_type=Non
   outfile = outfile or sys.stdout
   csv.writer( outfile , dialect='excel' ).writerows(cells)
 
-def o_cells_json(cells,pgs, outfilename=None, infile=None, name=None, output_type=None) :
+def o_cells_json(cells,pgs, outfile=None, infile=None, name=None, output_type=None) :
   """Output JSON formatted cell data"""
   outfile = outfile or sys.stdout
   #defaults
