@@ -309,10 +309,10 @@ def process_page(infile, pgs,
    
   def getCell( (i,j,u,v) ):
     (l,r,t,b) = ( vd[2*i+1] , vd[ 2*(i+u) ], hd[2*j+1], hd[2*(j+v)] )
-    p = popen(
-    ("pdftotext -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -"
-         % (bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile) ) ),
-        stdout=subprocess.PIPE, shell=True )
+    p = popen("pdftotext", 
+              "pdftotext -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -" % (bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile)),
+              stdout=subprocess.PIPE, 
+              shell=True )
     
     ret = p.communicate()[0]
     if whitespace != 'raw' :
