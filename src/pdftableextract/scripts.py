@@ -3,6 +3,8 @@ import sys
 import logging
 import subprocess
 from .core import process_page, output
+import core
+
 #-----------------------------------------------------------------------
 
 def procargs() :
@@ -53,25 +55,32 @@ def procargs() :
      help = "What to do with whitespace in cells. none = remove it all, "
             "normalize (default) = any whitespace (including CRLF) replaced "
             "with a single space, raw = do nothing." )
-
+  p.add_argument("--traceback","--backtrace","-tb","-bt",action="store_true")
   return p.parse_args()
 
 def main():
   try:
-    imain()
+    args = procargs()
+    imain(args)
   except IOError as e:
+    if args.traceback:
+        raise
     sys.exit("I/O Error running pdf-table-extract: {0}".format(e))
   except OSError as e:
     print("An OS Error occurred running pdf-table-extract: Is `pdftoppm` installed and available?")
+    if args.traceback:
+        raise
     sys.exit("OS Error: {0}".format(e))
   except subprocess.CalledProcessError as e:
+    if args.traceback:
+        raise
     sys.exit("Error while checking a subprocess call: {0}".format(e))
   except Exception as e:
+    if args.traceback:
+        raise
     sys.exit(e)
 
-def imain():
-    import core
-    args = procargs()
+def imain(args):
     cells = []
     if args.checkcrop or args.checklines or args.checkdivs or args.checkcells:
         for pgs in args.page :
