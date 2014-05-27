@@ -457,9 +457,9 @@ def o_table_html(cells,pgs, outfile=None, output_type=None, name=None, infile=No
     (i,j,u,v,pg,value) = cells[k]
     if j > oj or pg > opg:
       if pg > opg:
-        s = "Name: " + self.name + ", " if self.name else ""
+        s = "Name: " + name + ", " if name else ""
         root.appendChild( doc.createComment( s + 
-          ("Source: %s page %d." % (self.infile, pg) )));
+          ("Source: %s page %d." % (infile, pg) )));
       if tr :
         root.appendChild(tr)
       tr = doc.createElement("tr")
