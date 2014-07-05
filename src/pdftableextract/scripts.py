@@ -56,6 +56,8 @@ def procargs() :
             "normalize (default) = any whitespace (including CRLF) replaced "
             "with a single space, raw = do nothing." )
   p.add_argument("--traceback","--backtrace","-tb","-bt",action="store_true")
+  p.add_argument("--debug_poppler",action="store_true")
+
   return p.parse_args()
 
 def main():
@@ -100,7 +102,7 @@ def imain(args):
                 name=args.name,
                 pad=args.pad,
                 white=args.white,
-                black=args.black, outfilename=args.outfile)
+                black=args.black, outfilename=args.outfile,debug_poppler=args.debug_poppler)
 
     else:
         for pgs in args.page :
@@ -120,7 +122,7 @@ def imain(args):
                 name=args.name,
                 pad=args.pad,
                 white=args.white,
-                black=args.black))
+                black=args.black,debug_poppler=args.debug_poppler))
 
             filenames = dict()
             if args.outfile is None:

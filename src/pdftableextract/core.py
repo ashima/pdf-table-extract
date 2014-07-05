@@ -10,6 +10,33 @@ from xml.dom.minidom import getDOMImplementation
 import json
 import csv
 
+def check_for_executable_with_extensions(name,flags,ext=None,debug_poppler=False):
+    """Checks for the executable with an optional extension from the list of extensions"""
+    if ext is None:
+        ext=["",".exe"]
+    errors = []
+    success=False
+    use_name=None
+    for e in ext:
+        myname="{0}{1}".format(name,e)
+        mycommand=[myname,"-h"]
+        if debug_poppler:
+            print "Testing {0} with command {1}".format(myname," ".join(mycommand))
+        try:
+            check_for_required_executable(myname,mycommand)
+            success=True
+            use_name = myname
+            if debug_poppler:
+                print "Found {0} with command {1}".format(myname," ".join(mycommand))
+
+        except Exception as e:
+            errors.append(e)
+
+    if success:
+        return use_name
+    else:
+        raise errors[0]
+
 #-----------------------------------------------------------------------
 def check_for_required_executable(name,command):
     """Checks for an executable called 'name' by running 'command' and supressing
@@ -70,17 +97,19 @@ def process_page(infile, pgs,
     checkdivs=False,
     checkcells=False,
     whitespace="normalize",
-    boxes=False) :
+    boxes=False,
+    debug_poppler=False) :
     
   outfile = open(outfilename,'w') if outfilename else sys.stdout
   page=page or []
   (pg,frow,lrow) = (map(int,(pgs.split(":")))+[None,None])[0:3]
   #check that pdftoppdm exists by running a simple command
-  check_for_required_executable("pdftoppm",["pdftoppm","-h"])
+  pdftoppm_executable_name = check_for_executable_with_extensions("pdftoppm","-h",debug_poppler=debug_poppler)
+  #check_for_required_executable(executable_name,[executable_name,"-h"])
   #end check
 
-  p = popen("pdftoppm", ("pdftoppm -gray -r %d -f %d -l %d %s " %
-      (bitmap_resolution,pg,pg,quote(infile))),
+  p = popen(pdftoppm_executable_name, ("%s -gray -r %d -f %d -l %d %s " %
+      (pdftoppm_executable_name, bitmap_resolution,pg,pg,quote(infile))),
       stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True )
 
 #-----------------------------------------------------------------------
@@ -307,10 +336,10 @@ def process_page(infile, pgs,
 
   whitespace = re.compile( r'\s+')
    
-  def getCell( (i,j,u,v) ):
+  def getCell(pdftotext_executable_name, (i,j,u,v) ):
     (l,r,t,b) = ( vd[2*i+1] , vd[ 2*(i+u) ], hd[2*j+1], hd[2*(j+v)] )
-    p = popen("pdftotext", 
-              "pdftotext -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -" % (bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile)),
+    p = popen(pdftotext_executable_name,
+              "%s -r %d -x %d -y %d -W %d -H %d -layout -nopgbrk -f %d -l %d %s -" % (quote(pdftotext_executable_name), bitmap_resolution, l-pad, t-pad, r-l, b-t, pg, pg, quote(infile)),
               stdout=subprocess.PIPE, 
               shell=True )
     
@@ -327,9 +356,10 @@ def process_page(infile, pgs,
               ( frow == None or (x[1] >= frow and x[1] <= lrow)) ]
   else :
     #check that pdftotext exists by running a simple command
-    check_for_required_executable("pdftotext",["pdftotext","-h"])
+    pdftotext_executable_name = check_for_executable_with_extensions("pdftotext","-h",debug_poppler=debug_poppler)
+    # check_for_required_executable("pdftotext",["pdftotext","-h"])
     #end check
-    cells = [ getCell(x)   for x in cells if 
+    cells = [ getCell(pdftotext_executable_name, x)   for x in cells if 
               ( frow == None or (x[1] >= frow and x[1] <= lrow)) ]
   return cells
 
